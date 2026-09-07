@@ -1206,6 +1206,49 @@ function library:AddWindow(title, options)
 				new_tab.Parent = tabs
 				new_tab.ZIndex = new_tab.ZIndex + (windows * 10)
 
+				-- ============================================================
+				-- MOBILE SCROLL FIX
+				-- Every cloned tab gets its OWN canvas updater. The old
+				-- implementation only connected the prefab's layout, so
+				-- cloned tabs could keep a zero CanvasSize on mobile.
+				-- ============================================================
+				new_tab.ScrollingEnabled = true
+				new_tab.Active = true
+				new_tab.ScrollingDirection = Enum.ScrollingDirection.Y
+				new_tab.ScrollBarThickness = 6
+				new_tab.CanvasPosition = Vector2.new(0, 0)
+
+				local new_tab_layout = new_tab:FindFirstChildOfClass("UIListLayout")
+				local function updateTabCanvas()
+					if new_tab and new_tab_layout then
+						local contentHeight = new_tab_layout.AbsoluteContentSize.Y + 12
+						new_tab.CanvasSize = UDim2.new(0, 0, 0, math.max(contentHeight, new_tab.AbsoluteSize.Y))
+					end
+				end
+				if new_tab_layout then
+					new_tab_layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabCanvas)
+				end
+				new_tab.ChildAdded:Connect(function()
+					task.defer(updateTabCanvas)
+				end)
+				new_tab.ChildRemoved:Connect(function()
+					task.defer(updateTabCanvas)
+				end)
+				new_tab:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabCanvas)
+				task.defer(updateTabCanvas)
+
+				-- Horizontal scrolling for the tab bar, including on touch devices.
+				tab_buttons.ScrollingEnabled = true
+				tab_buttons.Active = true
+				tab_buttons.ScrollingDirection = Enum.ScrollingDirection.X
+				local function updateTabBarCanvas()
+					local contentWidth = uiListLayout.AbsoluteContentSize.X + 12
+					tab_buttons.CanvasSize = UDim2.new(0, math.max(contentWidth, tab_buttons.AbsoluteSize.X), 0, 0)
+				end
+				uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabBarCanvas)
+				tab_buttons:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabBarCanvas)
+				task.defer(updateTabBarCanvas)
+
 				local function show()
 					if dropdown_open then return end
 					for i, v in pairs(tab_buttons:GetChildren()) do
