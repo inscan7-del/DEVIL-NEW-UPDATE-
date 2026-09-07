@@ -1215,35 +1215,58 @@ function library:AddWindow(title, options)
 				new_tab.ZIndex = new_tab.ZIndex + (windows * 10)
 
 				-- ============================================================
-				-- MOBILE SCROLL FIX
-				-- Every cloned tab gets its OWN canvas updater. The old
-				-- implementation only connected the prefab's layout, so
-				-- cloned tabs could keep a zero CanvasSize on mobile.
+				-- MOBILE SCROLL FIX (robust)
+				-- Do not rely only on UIListLayout.AbsoluteContentSize.
+				-- Some Elerium controls/folders resize after creation, so the
+				-- actual rendered bottom is calculated from all GuiObjects.
 				-- ============================================================
 				new_tab.ScrollingEnabled = true
 				new_tab.Active = true
 				new_tab.ScrollingDirection = Enum.ScrollingDirection.Y
 				new_tab.ScrollBarThickness = 6
+				new_tab.AutomaticCanvasSize = Enum.AutomaticSize.None
 				new_tab.CanvasPosition = Vector2.new(0, 0)
 
-				local new_tab_layout = new_tab:FindFirstChildOfClass("UIListLayout")
 				local function updateTabCanvas()
-					if new_tab and new_tab_layout then
-						local contentHeight = new_tab_layout.AbsoluteContentSize.Y + 12
-						new_tab.CanvasSize = UDim2.new(0, 0, 0, math.max(contentHeight, new_tab.AbsoluteSize.Y))
+					if not new_tab or not new_tab.Parent then return end
+					local tabTop = new_tab.AbsolutePosition.Y
+					local maxBottom = 0
+					for _, obj in ipairs(new_tab:GetDescendants()) do
+						if obj:IsA("GuiObject") and obj.Visible then
+							local bottom = (obj.AbsolutePosition.Y - tabTop) + obj.AbsoluteSize.Y
+							if bottom > maxBottom then maxBottom = bottom end
+						end
 					end
+					local viewport = new_tab.AbsoluteSize.Y
+					local canvasHeight = math.ceil(math.max(maxBottom + 80, viewport + 1))
+					new_tab.CanvasSize = UDim2.new(0, 0, 0, canvasHeight)
 				end
-				if new_tab_layout then
-					new_tab_layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabCanvas)
-				end
-				new_tab.ChildAdded:Connect(function()
+
+				new_tab.DescendantAdded:Connect(function()
 					task.defer(updateTabCanvas)
 				end)
-				new_tab.ChildRemoved:Connect(function()
+				new_tab.DescendantRemoving:Connect(function()
 					task.defer(updateTabCanvas)
 				end)
 				new_tab:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabCanvas)
+
+				-- Elerium folders can change size later; keep the canvas synced.
+				local lastCanvasHeight = -1
+				local scrollSync
+				scrollSync = RS.Heartbeat:Connect(function()
+					if not new_tab or not new_tab.Parent then
+						scrollSync:Disconnect()
+						return
+					end
+					updateTabCanvas()
+					local h = new_tab.CanvasSize.Y.Offset
+					if h ~= lastCanvasHeight then lastCanvasHeight = h end
+				end)
+
 				task.defer(updateTabCanvas)
+				task.delay(0.25, updateTabCanvas)
+				task.delay(1, updateTabCanvas)
+				task.delay(2, updateTabCanvas)
 
 				-- Horizontal scrolling for the tab bar, including on touch devices.
 				tab_buttons.ScrollingEnabled = true
