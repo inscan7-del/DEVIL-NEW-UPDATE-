@@ -1214,12 +1214,10 @@ function library:AddWindow(title, options)
 				new_tab.Parent = tabs
 				new_tab.ZIndex = new_tab.ZIndex + (windows * 10)
 
-				-- ============================================================
-				-- MOBILE SCROLL FIX (robust)
-				-- Do not rely only on UIListLayout.AbsoluteContentSize.
-				-- Some Elerium controls/folders resize after creation, so the
-				-- actual rendered bottom is calculated from all GuiObjects.
-				-- ============================================================
+				-- MOBILE SCROLL FIX
+				-- IMPORTANT: calculate CanvasSize from UIListLayout, not from
+				-- AbsolutePosition. AbsolutePosition changes while scrolling and
+				-- would incorrectly shrink the canvas before reaching the bottom.
 				new_tab.ScrollingEnabled = true
 				new_tab.Active = true
 				new_tab.ScrollingDirection = Enum.ScrollingDirection.Y
@@ -1227,58 +1225,35 @@ function library:AddWindow(title, options)
 				new_tab.AutomaticCanvasSize = Enum.AutomaticSize.None
 				new_tab.CanvasPosition = Vector2.new(0, 0)
 
+				local contentLayout = new_tab:FindFirstChildWhichIsA("UIListLayout")
 				local function updateTabCanvas()
-					if not new_tab or not new_tab.Parent then return end
-					local tabTop = new_tab.AbsolutePosition.Y
-					local maxBottom = 0
-					for _, obj in ipairs(new_tab:GetDescendants()) do
-						if obj:IsA("GuiObject") and obj.Visible then
-							local bottom = (obj.AbsolutePosition.Y - tabTop) + obj.AbsoluteSize.Y
-							if bottom > maxBottom then maxBottom = bottom end
-						end
-					end
-					local viewport = new_tab.AbsoluteSize.Y
-					local canvasHeight = math.ceil(math.max(maxBottom + 80, viewport + 1))
-					new_tab.CanvasSize = UDim2.new(0, 0, 0, canvasHeight)
+					if not new_tab.Parent then return end
+					local contentHeight = contentLayout and contentLayout.AbsoluteContentSize.Y or 0
+					-- Generous bottom padding guarantees the final control can be
+					-- moved completely above the bottom edge on small screens.
+					local canvasHeight = math.ceil(contentHeight + 70)
+					local minimumHeight = math.ceil(new_tab.AbsoluteSize.Y + 1)
+					new_tab.CanvasSize = UDim2.new(0, 0, 0, math.max(canvasHeight, minimumHeight))
 				end
 
+				if contentLayout then
+					contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabCanvas)
+				end
+				new_tab:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabCanvas)
 				new_tab.DescendantAdded:Connect(function()
 					task.defer(updateTabCanvas)
 				end)
 				new_tab.DescendantRemoving:Connect(function()
 					task.defer(updateTabCanvas)
 				end)
-				new_tab:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabCanvas)
 
-				-- Elerium folders can change size later; keep the canvas synced.
-				local lastCanvasHeight = -1
-				local scrollSync
-				scrollSync = RS.Heartbeat:Connect(function()
-					if not new_tab or not new_tab.Parent then
-						scrollSync:Disconnect()
-						return
-					end
-					updateTabCanvas()
-					local h = new_tab.CanvasSize.Y.Offset
-					if h ~= lastCanvasHeight then lastCanvasHeight = h end
-				end)
-
+				-- Elerium folders resize asynchronously, so give the layout a few
+				-- deferred recalculations without changing it while the user scrolls.
 				task.defer(updateTabCanvas)
-				task.delay(0.25, updateTabCanvas)
+				task.delay(0.1, updateTabCanvas)
+				task.delay(0.5, updateTabCanvas)
 				task.delay(1, updateTabCanvas)
 				task.delay(2, updateTabCanvas)
-
-				-- Horizontal scrolling for the tab bar, including on touch devices.
-				tab_buttons.ScrollingEnabled = true
-				tab_buttons.Active = true
-				tab_buttons.ScrollingDirection = Enum.ScrollingDirection.X
-				local function updateTabBarCanvas()
-					local contentWidth = uiListLayout.AbsoluteContentSize.X + 12
-					tab_buttons.CanvasSize = UDim2.new(0, math.max(contentWidth, tab_buttons.AbsoluteSize.X), 0, 0)
-				end
-				uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabBarCanvas)
-				tab_buttons:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabBarCanvas)
-				task.defer(updateTabBarCanvas)
 
 				local function show()
 					if dropdown_open then return end
