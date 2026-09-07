@@ -1210,9 +1210,8 @@ function library:AddWindow(title, options)
 				new_tab.Parent = tabs
 				new_tab.ZIndex = new_tab.ZIndex + (windows * 10)
 
-				-- ROBUST MOBILE SCROLL
-				-- Each cloned tab is a real ScrollingFrame. CanvasSize is driven only
-				-- by the tab's own UIListLayout, never by CanvasPosition/AbsolutePosition.
+				-- MOBILE SCROLL: controls live in an auto-sized content frame so
+				-- the full tab height is always available on touch devices.
 				new_tab.ScrollingEnabled = true
 				new_tab.Active = true
 				new_tab.Selectable = true
@@ -1220,33 +1219,37 @@ function library:AddWindow(title, options)
 				new_tab.ScrollBarThickness = 6
 				new_tab.AutomaticCanvasSize = Enum.AutomaticSize.None
 				new_tab.ClipsDescendants = true
-				new_tab.CanvasPosition = Vector2.new(0, 0)
 
-				local contentLayout = new_tab:FindFirstChildWhichIsA("UIListLayout")
-				local bottomPadding = new_tab:FindFirstChildWhichIsA("UIPadding")
+				local oldLayout = new_tab:FindFirstChildWhichIsA("UIListLayout")
+				local oldPadding = new_tab:FindFirstChildWhichIsA("UIPadding")
+				local content = Instance.new("Frame")
+				content.Name = "__PhoenixTabContent"
+				content.BackgroundTransparency = 1
+				content.BorderSizePixel = 0
+				content.Position = UDim2.new(0, 0, 0, 0)
+				content.Size = UDim2.new(1, 0, 0, 0)
+				content.AutomaticSize = Enum.AutomaticSize.Y
+				content.ZIndex = new_tab.ZIndex
+				content.Parent = new_tab
+
+				if oldPadding then oldPadding.Parent = content end
+				if oldLayout then oldLayout.Parent = content end
+
 				local function updateTabCanvas()
 					if not new_tab.Parent then return end
-					local contentHeight = contentLayout and contentLayout.AbsoluteContentSize.Y or 0
-					local padBottom = bottomPadding and bottomPadding.PaddingBottom.Offset or 0
+					local contentHeight = content.AbsoluteSize.Y
 					local viewportHeight = new_tab.AbsoluteSize.Y
-					local canvasHeight = math.ceil(contentHeight + padBottom + 20)
-					canvasHeight = math.max(canvasHeight, math.ceil(viewportHeight + 1))
+					local canvasHeight = math.max(math.ceil(contentHeight + 110), math.ceil(viewportHeight + 1))
 					new_tab.CanvasSize = UDim2.new(0, 0, 0, canvasHeight)
 				end
 
-				if contentLayout then
-					contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateTabCanvas)
+				if oldLayout then
+					oldLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+						task.defer(updateTabCanvas)
+					end)
 				end
+				content:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabCanvas)
 				new_tab:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateTabCanvas)
-				new_tab.DescendantAdded:Connect(function()
-					task.defer(updateTabCanvas)
-				end)
-				new_tab.DescendantRemoving:Connect(function()
-					task.defer(updateTabCanvas)
-				end)
-				if bottomPadding then
-					bottomPadding:GetPropertyChangedSignal("PaddingBottom"):Connect(updateTabCanvas)
-				end
 				task.defer(updateTabCanvas)
 				task.delay(0.1, updateTabCanvas)
 				task.delay(0.5, updateTabCanvas)
@@ -1285,7 +1288,7 @@ function library:AddWindow(title, options)
 
 						local label = prefabs:FindFirstChild("Label"):Clone()
 
-						label.Parent = new_tab
+						label.Parent = content
 						label.Text = label_text
 						label.Size = UDim2.new(0, gNameLen(label), 0, 20)
 						label.ZIndex = label.ZIndex + (windows * 10)
@@ -1299,7 +1302,7 @@ function library:AddWindow(title, options)
 
 						local button = prefabs:FindFirstChild("Button"):Clone()
 
-						button.Parent = new_tab
+						button.Parent = content
 						button.Text = button_text
 						button.Size = UDim2.new(0, gNameLen(button), 0, 20)
 						button.ZIndex = button.ZIndex + (windows * 10)
@@ -1330,7 +1333,7 @@ function library:AddWindow(title, options)
 
 						local switch = prefabs:FindFirstChild("Switch"):Clone()
 
-						switch.Parent = new_tab
+						switch.Parent = content
 						switch:FindFirstChild("Title").Text = switch_text
 
 						switch:FindFirstChild("Title").ZIndex = switch:FindFirstChild("Title").ZIndex + (windows * 10)
@@ -1372,7 +1375,7 @@ function library:AddWindow(title, options)
 
 						local textbox = prefabs:FindFirstChild("TextBox"):Clone()
 
-						textbox.Parent = new_tab
+						textbox.Parent = content
 						textbox.PlaceholderText = textbox_text
 						textbox.ZIndex = textbox.ZIndex + (windows * 10)
 						textbox:GetChildren()[1].ZIndex = textbox:GetChildren()[1].ZIndex + (windows * 10)
@@ -1405,7 +1408,7 @@ function library:AddWindow(title, options)
 
 						local slider = prefabs:FindFirstChild("Slider"):Clone()
 
-						slider.Parent = new_tab
+						slider.Parent = content
 						slider.ZIndex = slider.ZIndex + (windows * 10)
 
 						local title = slider:FindFirstChild("Title")
@@ -1516,7 +1519,7 @@ function library:AddWindow(title, options)
 						input:GetChildren()[1].ZIndex = input:GetChildren()[1].ZIndex + (windows * 10)
 						title.ZIndex = title.ZIndex + (windows * 10)
 
-						keybind.Parent = new_tab
+						keybind.Parent = content
 						title.Text = "  " .. keybind_name
 						keybind.Size = UDim2.new(0, gNameLen(title) + 80, 0, 20)
 
@@ -1578,7 +1581,7 @@ function library:AddWindow(title, options)
 						indicator.ZIndex = indicator.ZIndex + (windows * 10)
 						dropdown:GetChildren()[3].ZIndex = dropdown:GetChildren()[3].ZIndex + (windows * 10)
 
-						dropdown.Parent = new_tab
+						dropdown.Parent = content
 						dropdown.Text = "      " .. dropdown_name
 						box.Size = UDim2.new(1, 0, 0, 0)
 
@@ -1658,7 +1661,7 @@ local object = prefabs:FindFirstChild("DropdownButton"):Clone()
 
 						local color_picker = prefabs:FindFirstChild("ColorPicker"):Clone()
 
-						color_picker.Parent = new_tab
+						color_picker.Parent = content
 						color_picker.ZIndex = color_picker.ZIndex + (windows * 10)
 
 						local palette = color_picker:FindFirstChild("Palette")
@@ -1775,7 +1778,7 @@ local object = prefabs:FindFirstChild("DropdownButton"):Clone()
 
 						local console = prefabs:FindFirstChild("Console"):Clone()
 
-						console.Parent = new_tab
+						console.Parent = content
 						console.ZIndex = console.ZIndex + (windows * 10)
 						console.Size = UDim2.new(1, 0, console_options.full and 1 or 0, console_options.y)
 
@@ -2074,7 +2077,7 @@ local object = prefabs:FindFirstChild("DropdownButton"):Clone()
 						local ha_data = {}
 
 						local ha = prefabs:FindFirstChild("HorizontalAlignment"):Clone()
-						ha.Parent = new_tab
+						ha.Parent = content
 
 						function ha_data:AddButton(...)
 							local data, object
@@ -2109,7 +2112,7 @@ local object = prefabs:FindFirstChild("DropdownButton"):Clone()
 						toggle.ZIndex = toggle.ZIndex + (windows * 10)
 						button:GetChildren()[1].ZIndex = button:GetChildren()[1].ZIndex + (windows * 10)
 
-						folder.Parent = new_tab
+						folder.Parent = content
 						button.Text = "      " .. folder_name
 
 						spawn(function()
