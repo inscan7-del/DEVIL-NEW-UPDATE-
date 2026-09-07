@@ -82,10 +82,10 @@ local top = Instance.new("ImageLabel")
 local tabs = Instance.new("Frame")
 local titleLabel = Instance.new("TextLabel")
 local tabSelection = Instance.new("ImageLabel")
-local tabButtons = Instance.new("Frame")
+local tabButtons = Instance.new("ScrollingFrame")
 local uiListLayout = Instance.new("UIListLayout")
 local frame = Instance.new("Frame")
-local tab = Instance.new("Frame")
+local tab = Instance.new("ScrollingFrame")
 local uiListLayout2 = Instance.new("UIListLayout")
 local textBox = Instance.new("TextBox")
 local textBoxRoundify4px = Instance.new("ImageLabel")
@@ -267,11 +267,25 @@ tabButtons.Parent = tabSelection
 tabButtons.BackgroundColor3 = Color3.new(1, 1, 1)
 tabButtons.BackgroundTransparency = 1
 tabButtons.Size = UDim2.new(1, 0, 1, 0)
+tabButtons.BorderSizePixel = 0
+tabButtons.CanvasSize = UDim2.new(0, 0, 0, 0)
+tabButtons.ScrollBarThickness = 4
+tabButtons.ScrollBarImageTransparency = 0.15
+tabButtons.ScrollingDirection = Enum.ScrollingDirection.X
+tabButtons.ScrollingEnabled = true
+tabButtons.Active = true
+tabButtons.ElasticBehavior = Enum.ElasticBehavior.Always
+tabButtons.AutomaticCanvasSize = Enum.AutomaticSize.X
 
 uiListLayout.Parent = tabButtons
 uiListLayout.FillDirection = Enum.FillDirection.Horizontal
 uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 uiListLayout.Padding = UDim.new(0, 2)
+
+-- Mobile-friendly horizontal tab scrolling. The canvas follows the total tab width.
+uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	tabButtons.CanvasSize = UDim2.new(0, uiListLayout.AbsoluteContentSize.X + 8, 0, 0)
+end)
 
 frame.Parent = tabSelection
 frame.BackgroundColor3 = Color3.new(0.12549, 0.227451, 0.372549)
@@ -286,10 +300,24 @@ tab.BackgroundColor3 = Color3.new(1, 1, 1)
 tab.BackgroundTransparency = 1
 tab.Size = UDim2.new(1, 0, 1, 0)
 tab.Visible = false
+tab.BorderSizePixel = 0
+tab.CanvasSize = UDim2.new(0, 0, 0, 0)
+tab.ScrollBarThickness = 6
+tab.ScrollBarImageTransparency = 0.2
+tab.ScrollingDirection = Enum.ScrollingDirection.Y
+tab.ScrollingEnabled = true
+tab.Active = true
+tab.ElasticBehavior = Enum.ElasticBehavior.Always
+tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
 
 uiListLayout2.Parent = tab
 uiListLayout2.SortOrder = Enum.SortOrder.LayoutOrder
 uiListLayout2.Padding = UDim.new(0, 5)
+
+-- Mobile-friendly vertical scrolling inside every tab.
+uiListLayout2:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	tab.CanvasSize = UDim2.new(0, 0, 0, uiListLayout2.AbsoluteContentSize.Y + 10)
+end)
 
 textBox.Parent = prefabs
 textBox.BackgroundColor3 = Color3.new(1, 1, 1)
