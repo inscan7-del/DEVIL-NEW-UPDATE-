@@ -268,23 +268,27 @@ tabButtons.BackgroundColor3 = Color3.new(1, 1, 1)
 tabButtons.BackgroundTransparency = 1
 tabButtons.Size = UDim2.new(1, 0, 1, 0)
 tabButtons.BorderSizePixel = 0
+tabButtons.ClipsDescendants = true
 tabButtons.CanvasSize = UDim2.new(0, 0, 0, 0)
 tabButtons.ScrollBarThickness = 4
 tabButtons.ScrollBarImageTransparency = 0.15
 tabButtons.ScrollingDirection = Enum.ScrollingDirection.X
 tabButtons.ScrollingEnabled = true
 tabButtons.Active = true
-tabButtons.ElasticBehavior = Enum.ElasticBehavior.Always
-tabButtons.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabButtons.Selectable = true
+tabButtons.AutomaticCanvasSize = Enum.AutomaticSize.None
 
 uiListLayout.Parent = tabButtons
 uiListLayout.FillDirection = Enum.FillDirection.Horizontal
 uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 uiListLayout.Padding = UDim.new(0, 2)
 
--- Mobile-friendly horizontal tab scrolling. The canvas follows the total tab width.
+local tabButtonsPadding = Instance.new("UIPadding")
+tabButtonsPadding.PaddingRight = UDim.new(0, 30)
+tabButtonsPadding.Parent = tabButtons
+
 uiListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	tabButtons.CanvasSize = UDim2.new(0, uiListLayout.AbsoluteContentSize.X + 8, 0, 0)
+	tabButtons.CanvasSize = UDim2.new(0, math.ceil(uiListLayout.AbsoluteContentSize.X + 30), 0, 0)
 end)
 
 frame.Parent = tabSelection
@@ -300,32 +304,24 @@ tab.BackgroundColor3 = Color3.new(1, 1, 1)
 tab.BackgroundTransparency = 1
 tab.Size = UDim2.new(1, 0, 1, 0)
 tab.Visible = false
-tab.CanvasSize = UDim2.new(0, 0, 0, 0)
-tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
-tab.ScrollingDirection = Enum.ScrollingDirection.Y
-tab.ScrollingEnabled = true
-tab.Active = true
-tab.ScrollBarThickness = 6
-tab.ElasticBehavior = Enum.ElasticBehavior.Always
-tab.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
 tab.BorderSizePixel = 0
+tab.ClipsDescendants = true
 tab.CanvasSize = UDim2.new(0, 0, 0, 0)
 tab.ScrollBarThickness = 6
 tab.ScrollBarImageTransparency = 0.2
 tab.ScrollingDirection = Enum.ScrollingDirection.Y
 tab.ScrollingEnabled = true
 tab.Active = true
-tab.ElasticBehavior = Enum.ElasticBehavior.Always
-tab.AutomaticCanvasSize = Enum.AutomaticSize.Y
+tab.Selectable = true
+tab.AutomaticCanvasSize = Enum.AutomaticSize.None
+
+autoTabPadding = Instance.new("UIPadding")
+autoTabPadding.PaddingBottom = UDim.new(0, 100)
+autoTabPadding.Parent = tab
 
 uiListLayout2.Parent = tab
 uiListLayout2.SortOrder = Enum.SortOrder.LayoutOrder
 uiListLayout2.Padding = UDim.new(0, 5)
-
--- Mobile-friendly vertical scrolling inside every tab.
-uiListLayout2:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-	tab.CanvasSize = UDim2.new(0, 0, 0, uiListLayout2.AbsoluteContentSize.Y + 10)
-end)
 
 textBox.Parent = prefabs
 textBox.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -1214,26 +1210,28 @@ function library:AddWindow(title, options)
 				new_tab.Parent = tabs
 				new_tab.ZIndex = new_tab.ZIndex + (windows * 10)
 
-				-- MOBILE SCROLL FIX
-				-- IMPORTANT: calculate CanvasSize from UIListLayout, not from
-				-- AbsolutePosition. AbsolutePosition changes while scrolling and
-				-- would incorrectly shrink the canvas before reaching the bottom.
+				-- ROBUST MOBILE SCROLL
+				-- Each cloned tab is a real ScrollingFrame. CanvasSize is driven only
+				-- by the tab's own UIListLayout, never by CanvasPosition/AbsolutePosition.
 				new_tab.ScrollingEnabled = true
 				new_tab.Active = true
+				new_tab.Selectable = true
 				new_tab.ScrollingDirection = Enum.ScrollingDirection.Y
 				new_tab.ScrollBarThickness = 6
 				new_tab.AutomaticCanvasSize = Enum.AutomaticSize.None
+				new_tab.ClipsDescendants = true
 				new_tab.CanvasPosition = Vector2.new(0, 0)
 
 				local contentLayout = new_tab:FindFirstChildWhichIsA("UIListLayout")
+				local bottomPadding = new_tab:FindFirstChildWhichIsA("UIPadding")
 				local function updateTabCanvas()
 					if not new_tab.Parent then return end
 					local contentHeight = contentLayout and contentLayout.AbsoluteContentSize.Y or 0
-					-- Generous bottom padding guarantees the final control can be
-					-- moved completely above the bottom edge on small screens.
-					local canvasHeight = math.ceil(contentHeight + 70)
-					local minimumHeight = math.ceil(new_tab.AbsoluteSize.Y + 1)
-					new_tab.CanvasSize = UDim2.new(0, 0, 0, math.max(canvasHeight, minimumHeight))
+					local padBottom = bottomPadding and bottomPadding.PaddingBottom.Offset or 0
+					local viewportHeight = new_tab.AbsoluteSize.Y
+					local canvasHeight = math.ceil(contentHeight + padBottom + 20)
+					canvasHeight = math.max(canvasHeight, math.ceil(viewportHeight + 1))
+					new_tab.CanvasSize = UDim2.new(0, 0, 0, canvasHeight)
 				end
 
 				if contentLayout then
@@ -1246,9 +1244,9 @@ function library:AddWindow(title, options)
 				new_tab.DescendantRemoving:Connect(function()
 					task.defer(updateTabCanvas)
 				end)
-
-				-- Elerium folders resize asynchronously, so give the layout a few
-				-- deferred recalculations without changing it while the user scrolls.
+				if bottomPadding then
+					bottomPadding:GetPropertyChangedSignal("PaddingBottom"):Connect(updateTabCanvas)
+				end
 				task.defer(updateTabCanvas)
 				task.delay(0.1, updateTabCanvas)
 				task.delay(0.5, updateTabCanvas)
